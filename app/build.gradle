@@ -17,7 +17,11 @@ repositories {
 }
 
 dependencies {
-
+    implementation 'io.vertx:vertx-core:4.3.0'
+    implementation 'io.vertx:vertx-rx-java3:4.3.0'
+    implementation 'io.vertx:vertx-cassandra-client:4.3.0'
+    implementation 'io.grpc:grpc-netty-shaded:1.41.0'
+    implementation 'io.stargate.grpc:grpc-proto:1.0.41'
 }
 
 application {

@@ -3,12 +3,128 @@
  */
 package io.sammers;
 
+import com.datastax.oss.driver.api.core.CqlSession;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.reactivex.rxjava3.core.Single;
+import io.stargate.grpc.StargateBearerToken;
+import io.stargate.proto.QueryOuterClass;
+import io.stargate.proto.StargateGrpc;
+import io.vertx.cassandra.CassandraClientOptions;
+import io.vertx.rxjava3.cassandra.CassandraClient;
+import io.vertx.rxjava3.core.Vertx;
+
+import java.net.InetSocketAddress;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
+
 public class App {
-    public String getGreeting() {
-        return "Hello World!";
+
+    public static Vertx vertx;
+    public static String CASSANDRA = "cassandra";
+    public static CassandraClient vertxRx3;
+    protected static final CqlSession CQL_SESSION;
+
+    private static final String token;
+
+    private static final StargateGrpc.StargateStub stargateStub;
+
+    private static final StargateGrpc.StargateBlockingStub stargateBlockingStub;
+
+    static {
+        token = Auth.getTokenFromAuthEndpoint(CASSANDRA, CASSANDRA, "http://localhost:8081/v1/auth");
+        vertx = Vertx.vertx();
+        CQL_SESSION = CqlSession.builder()
+            .addContactPoint(new InetSocketAddress("localhost", 9044))
+            .withLocalDatacenter("datacenter1")
+            .build();
+        CassandraClientOptions options = new CassandraClientOptions()
+            .addContactPoint(new InetSocketAddress("localhost", 9044))
+            .setUsername(CASSANDRA)
+            .setPassword(CASSANDRA);
+        options.dataStaxClusterBuilder().withLocalDatacenter("datacenter1");
+        vertxRx3 = CassandraClient.create(vertx, options);
+        ManagedChannel channel = ManagedChannelBuilder.forAddress("localhost", 8090).usePlaintext().build();
+        stargateStub = StargateGrpc.newStub(channel)
+            .withDeadlineAfter(10, TimeUnit.SECONDS)
+            .withCallCredentials(new StargateBearerToken(token));
+        stargateBlockingStub =
+            StargateGrpc.newBlockingStub(channel)
+                .withDeadlineAfter(1000, TimeUnit.SECONDS)
+                .withCallCredentials(new StargateBearerToken(token));
     }
 
-    public static void main(String[] args) {
-        System.out.println(new App().getGreeting());
+    public static void main(String[] args) throws Exception {
+        grpcStargateLatencyTest(10000, 0);
+        nativeLatencyTest(10000, 0);
+        grpcStargateLatencyTest(10000, 0);
+        nativeLatencyTest(10000, 0);
+    }
+
+    public static void grpcStargateLatencyTest(int times, int warmup) {
+        //warmup
+        for (int i = 0; i < warmup; i++) {
+            grpcStargateLatencyTest0();
+        }
+        long totalNanos = 0;
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        for (int i = 0; i < times; i++) {
+            long latency = grpcStargateLatencyTest0();
+            max = Long.max(max, latency);
+            min = Long.min(min, latency);
+            totalNanos += latency;
+        }
+        System.out.println(
+            String.format("GRPC Stargate latency test x%s average=%s, min=%s, max=%s",
+                times,
+                msFromNano(totalNanos / times),
+                msFromNano(min),
+                msFromNano(max)
+            )
+        );
+    }
+
+    public static void nativeLatencyTest(int times, int warmup) {
+        //warmup
+        for (int i = 0; i < warmup; i++) {
+            nativeLatencyTest0().blockingGet();
+        }
+        long totalNanos = 0;
+        long min = Long.MAX_VALUE;
+        long max = Long.MIN_VALUE;
+        for (int i = 0; i < times; i++) {
+            long latency = nativeLatencyTest0().blockingGet();
+            max = Long.max(max, latency);
+            min = Long.min(min, latency);
+            totalNanos += latency;
+        }
+        System.out.println(
+            String.format("Native latency test x%s average=%s, min=%s, max=%s",
+                times,
+                msFromNano(totalNanos / times),
+                msFromNano(min),
+                msFromNano(max)
+            )
+        );
+    }
+
+    private static String msFromNano(Long nano) {
+        return TimeUnit.NANOSECONDS.toMillis(nano) + "," + TimeUnit.NANOSECONDS.toMicros(nano) % 1000 + "ms";
+    }
+
+    private static Single<Long> nativeLatencyTest0() {
+        AtomicLong tick = new AtomicLong(0);
+        return vertxRx3.rxExecute("select release_version from system.local")
+            .doOnSubscribe(sub -> tick.set(System.nanoTime()))
+            .map(done -> System.nanoTime() - tick.get());
+    }
+
+    private static Long grpcStargateLatencyTest0() {
+        long tick = System.nanoTime();
+        QueryOuterClass.Response response = stargateBlockingStub.executeQuery(
+            QueryOuterClass.Query.newBuilder().setCql("select release_version from system.local").build()
+        );
+        return System.nanoTime() - tick;
     }
 }
