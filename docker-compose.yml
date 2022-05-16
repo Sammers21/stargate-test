@@ -1,0 +1,45 @@
+version: '2'
+
+services:
+  test-cassandra:
+    image: cassandra:4.0.3
+    networks:
+      - test-network
+    ports:
+      - 9044:9042
+    mem_limit: 4G
+    environment:
+      - HEAP_NEWSIZE=128M
+      - MAX_HEAP_SIZE=2048M
+      - CASSANDRA_SEEDS=test-cassandra
+      - CASSANDRA_CLUSTER_NAME=test-cluster
+  stargate:
+    image: stargateio/stargate-4_0:v1.0.55
+    depends_on: 
+      - test-cassandra
+    networks:
+      - test-network
+    ports:
+      # cql
+      - 9045:9042
+      # graphql
+      - 8080:8080
+      # auth
+      - 8081:8081
+      # REST
+      - 8082:8082
+      # health
+      - 8084:8084
+      # grpc
+      - 8090:8090
+    mem_limit: 2G
+    environment:
+      - JAVA_OPTS="-Xmx2G"
+      - CLUSTER_NAME=test-cluster
+      - CLUSTER_VERSION=4.0
+      - SEED=test-cassandra
+      - RACK_NAME=rack1
+      - DATACENTER_NAME=datacenter1
+      - ENABLE_AUTH=false
+networks:
+  test-network:
