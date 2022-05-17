@@ -46,6 +46,8 @@ Exception in thread "main" io.grpc.StatusRuntimeException: INTERNAL: Prepared qu
 
 Stargate logs: `QueryProcessor.java:110 - 3 prepared statements discarded in the last minute because cache limit reached (10 MB)`.
 It seems like Stargate is creating a prepared statement for every insert, despite the fact that all the queries are the same except the values being inserted.
+While with native driver you just prepare once and use it all the time. Here is an issue on that topic: https://github.com/stargate/stargate/issues/931.
+`PreparedStatement`s in stargate are not being cached and reused in Stargate.
 
 
 
