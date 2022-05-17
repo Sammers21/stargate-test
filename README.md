@@ -79,6 +79,21 @@ Native select 100rows x10, avg=1,860ms, p50=2,851ms, p90=2,851ms p95=2,851ms p99
 Grpc Stargate select 100rows x10, avg=3,351ms, p50=5,26ms, p90=5,26ms p95=5,26ms p99=5,26ms, min=2,667ms, max=5,26m
 ```
 
+The native driver is performing around 2x times faster in this test.
+
+# Conclusion
+
+1. Stargate is [not caching](https://github.com/stargate/stargate/issues/931) prepared statements generated on every select/inserts
+causing queries to fail on high load with `grpc.StatusRuntimeException: INTERNAL`.
+2. There is almost no customization and configuration options in stargate. You can only specify the memory limits and
+the Cassandra instance to connect. You can't increase the datastax client cache of prepared queries, which would help
+to survive the high workloads.
+3. The project is almost two years old and has a lot of open and unresolved issues. Most likely the project has never been used
+with serious workloads by any big tech companies. Stargate is an immature project.
+4. Because of the inability to reuse prepared statements there is a 2x performance loss in latency and inability to handle
+hundreds of requests per seconds in comparison to the native driver which scales impressively well.
+
+
 # Links and references
 
 * [Developers guide](https://stargate.io/docs/stargate/1.0/developers-guide/install/install_cass_40.html)
