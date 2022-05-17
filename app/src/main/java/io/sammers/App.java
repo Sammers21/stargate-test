@@ -12,11 +12,13 @@ import io.stargate.proto.QueryOuterClass;
 import io.stargate.proto.StargateGrpc;
 import io.vertx.cassandra.CassandraClientOptions;
 import io.vertx.rxjava3.cassandra.CassandraClient;
+import io.vertx.rxjava3.cassandra.ResultSet;
 import io.vertx.rxjava3.core.Vertx;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class App {
 
@@ -55,54 +57,43 @@ public class App {
     }
 
     public static void main(String[] args) throws Exception {
-        grpcStargateLatencyTest(10000, 0);
-        nativeLatencyTest(10000, 0);
-        grpcStargateLatencyTest(10000, 0);
-        nativeLatencyTest(10000, 0);
+        latencyTest(1000, 3000, "Grpc Stargate Latency Test", App::grpcStargateLatencyTest0);
+        latencyTest(1000, 3000, "Native Latency Test", () -> nativeLatencyTest0().blockingGet());
+        latencyTest(1000, 3000, "Grpc Stargate Latency Test", App::grpcStargateLatencyTest0);
+        latencyTest(1000, 3000, "Native Latency Test", () -> nativeLatencyTest0().blockingGet());
     }
 
-    public static void grpcStargateLatencyTest(int times, int warmup) {
+    private static void latencyTest(int times, int warmup, String name, Runnable code) throws InterruptedException {
         //warmup
+        List<Long> latenciesList = new ArrayList<>(times);
         for (int i = 0; i < warmup; i++) {
-            grpcStargateLatencyTest0();
+            code.run();
         }
-        long totalNanos = 0;
+        Thread.sleep(1000);
         long min = Long.MAX_VALUE;
         long max = Long.MIN_VALUE;
         for (int i = 0; i < times; i++) {
-            long latency = grpcStargateLatencyTest0();
+            long tick = System.nanoTime();
+            code.run();
+            long latency = System.nanoTime() - tick;
             max = Long.max(max, latency);
             min = Long.min(min, latency);
-            totalNanos += latency;
+            latenciesList.add(latency);
         }
+        var avg = latenciesList.stream().mapToLong(x -> x).average().orElse(0);
+        var p50 = latenciesList.stream().sorted().skip((long) (0.90d * times)).findFirst().orElse(-1L);
+        var p90 = latenciesList.stream().sorted().skip((long) (0.90d * times)).findFirst().orElse(-1L);
+        var p95 = latenciesList.stream().sorted().skip((long) (0.95d * times)).findFirst().orElse(-1L);
+        var p99 = latenciesList.stream().sorted().skip((long) (0.99d * times)).findFirst().orElse(-1L);
         System.out.println(
-            String.format("GRPC Stargate latency test x%s average=%s, min=%s, max=%s",
+            String.format("%s x%s, avg=%s, p50=%s, p90=%s p95=%s p99=%s, min=%s, max=%s",
+                name,
                 times,
-                msFromNano(totalNanos / times),
-                msFromNano(min),
-                msFromNano(max)
-            )
-        );
-    }
-
-    public static void nativeLatencyTest(int times, int warmup) {
-        //warmup
-        for (int i = 0; i < warmup; i++) {
-            nativeLatencyTest0().blockingGet();
-        }
-        long totalNanos = 0;
-        long min = Long.MAX_VALUE;
-        long max = Long.MIN_VALUE;
-        for (int i = 0; i < times; i++) {
-            long latency = nativeLatencyTest0().blockingGet();
-            max = Long.max(max, latency);
-            min = Long.min(min, latency);
-            totalNanos += latency;
-        }
-        System.out.println(
-            String.format("Native latency test x%s average=%s, min=%s, max=%s",
-                times,
-                msFromNano(totalNanos / times),
+                msFromNano((long) avg),
+                msFromNano(p50),
+                msFromNano(p90),
+                msFromNano(p95),
+                msFromNano(p99),
                 msFromNano(min),
                 msFromNano(max)
             )
@@ -113,11 +104,8 @@ public class App {
         return TimeUnit.NANOSECONDS.toMillis(nano) + "," + TimeUnit.NANOSECONDS.toMicros(nano) % 1000 + "ms";
     }
 
-    private static Single<Long> nativeLatencyTest0() {
-        AtomicLong tick = new AtomicLong(0);
-        return vertxRx3.rxExecute("select release_version from system.local")
-            .doOnSubscribe(sub -> tick.set(System.nanoTime()))
-            .map(done -> System.nanoTime() - tick.get());
+    private static Single<ResultSet> nativeLatencyTest0() {
+        return vertxRx3.rxExecute("select release_version from system.local");
     }
 
     private static Long grpcStargateLatencyTest0() {
