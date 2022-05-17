@@ -22,13 +22,30 @@ Grpc Stargate Latency Test x1000, avg=1,197ms, p50=1,275ms, p90=1,275ms p95=1,35
 Native Latency Test x1000, avg=0,971ms, p50=1,70ms, p90=1,70ms p95=1,112ms p99=1,366ms, min=0,768ms, max=4,380ms
 ```
 
-## Test#2 one request latency test(system.local table)
+## Test#2 single insert latency test
 
 Schema:
 ```
 CREATE KEYSPACE IF NOT EXISTS ks WITH REPLICATION = {'class':'SimpleStrategy', 'replication_factor':'1'};
 CREATE TABLE IF NOT EXISTS ks.test (k text, v int, PRIMARY KEY(k, v));
 ```
+
+Query: `INSERT INTO ks.test (k, v) VALUES (?, ?)`
+
+### gRPC faliure
+
+Stargate via gRPC fails when trying to perform an insert with a following error:
+```
+Exception in thread "main" io.grpc.StatusRuntimeException: INTERNAL: Prepared query with ID 1f31fb40b0d8aa8289e9a099271d8816 not found (either the query was not prepared on this host (maybe the host has been restarted?) or you have prepared too many queries and it has been evicted from the internal cache)
+	at io.grpc.stub.ClientCalls.toStatusRuntimeException(ClientCalls.java:262)
+	at io.grpc.stub.ClientCalls.getUnchecked(ClientCalls.java:243)
+	at io.grpc.stub.ClientCalls.blockingUnaryCall(ClientCalls.java:156)
+	at io.stargate.proto.StargateGrpc$StargateBlockingStub.executeQuery(StargateGrpc.java:236)
+	...
+```
+
+Stargate logs: `QueryProcessor.java:110 - 3 prepared statements discarded in the last minute because cache limit reached (10 MB)`.
+It seems like Stargate is creating a prepared statement for every insert, despite the fact that all the queries are the same except the values being inserted.
 
 
 

@@ -4,20 +4,21 @@
 package io.sammers;
 
 import com.datastax.oss.driver.api.core.CqlSession;
+import com.datastax.oss.driver.api.core.cql.PreparedStatement;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.reactivex.rxjava3.core.Single;
 import io.stargate.grpc.StargateBearerToken;
 import io.stargate.proto.QueryOuterClass;
 import io.stargate.proto.StargateGrpc;
 import io.vertx.cassandra.CassandraClientOptions;
 import io.vertx.rxjava3.cassandra.CassandraClient;
-import io.vertx.rxjava3.cassandra.ResultSet;
 import io.vertx.rxjava3.core.Vertx;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public class App {
@@ -32,6 +33,9 @@ public class App {
     private static final StargateGrpc.StargateStub stargateStub;
 
     private static final StargateGrpc.StargateBlockingStub stargateBlockingStub;
+    private static final Random random = new Random();
+
+    private static PreparedStatement insertpreprd;
 
     static {
         token = Auth.getTokenFromAuthEndpoint(CASSANDRA, CASSANDRA, "http://localhost:8081/v1/auth");
@@ -57,10 +61,11 @@ public class App {
     }
 
     public static void main(String[] args) throws Exception {
-        latencyTest(1000, 3000, "Grpc Stargate Latency Test", App::grpcStargateLatencyTest0);
-        latencyTest(1000, 3000, "Native Latency Test", () -> nativeLatencyTest0().blockingGet());
-        latencyTest(1000, 3000, "Grpc Stargate Latency Test", App::grpcStargateLatencyTest0);
-        latencyTest(1000, 3000, "Native Latency Test", () -> nativeLatencyTest0().blockingGet());
+        latencyTest(1000, 3000, "Grpc Stargate select release", App::grpcStargateSelectRelease0);
+        latencyTest(1000, 3000, "Native select release", App::nativeSelectRelease0);
+        insertpreprd = vertxRx3.rxPrepare("INSERT INTO ks.test (k, v) VALUES (?, ?)").blockingGet();
+        latencyTest(1000, 3000, "Native insert", App::nativeInsert0);
+        latencyTest(1000, 3000, "Grpc Stargate insert", App::grpcStargateInsert0);
     }
 
     private static void latencyTest(int times, int warmup, String name, Runnable code) throws InterruptedException {
@@ -104,15 +109,24 @@ public class App {
         return TimeUnit.NANOSECONDS.toMillis(nano) + "," + TimeUnit.NANOSECONDS.toMicros(nano) % 1000 + "ms";
     }
 
-    private static Single<ResultSet> nativeLatencyTest0() {
-        return vertxRx3.rxExecute("select release_version from system.local");
+    private static void nativeSelectRelease0() {
+        vertxRx3.rxExecute("select release_version from system.local").blockingGet();
+    }
+    private static void nativeInsert0() {
+        vertxRx3.rxExecute(insertpreprd.bind(UUID.randomUUID().toString(), random.nextInt())).blockingGet();
     }
 
-    private static Long grpcStargateLatencyTest0() {
-        long tick = System.nanoTime();
-        QueryOuterClass.Response response = stargateBlockingStub.executeQuery(
+    private static void grpcStargateInsert0() {
+        stargateBlockingStub.executeQuery(
+            QueryOuterClass.Query.newBuilder()
+                .setCql(String.format("INSERT INTO ks.test (k, v) VALUES ('%s', %s)", UUID.randomUUID(), random.nextInt()))
+                .build()
+        );
+    }
+
+    private static void grpcStargateSelectRelease0() {
+        stargateBlockingStub.executeQuery(
             QueryOuterClass.Query.newBuilder().setCql("select release_version from system.local").build()
         );
-        return System.nanoTime() - tick;
     }
 }
