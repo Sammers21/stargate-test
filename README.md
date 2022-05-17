@@ -4,11 +4,14 @@ The goal of this repo is to test what is the diffrerence in latency and throughp
 
 ## Env
 
+Java:
 ```$ java --version
 java 18.0.1 2022-04-19
 Java(TM) SE Runtime Environment (build 18.0.1+10-24)
 Java HotSpot(TM) 64-Bit Server VM (build 18.0.1+10-24, mixed mode, sharing)
 ```
+
+Run Cassandra and Stargate setup: `docker-compose up -d`
 
 ## Test#1 one request latency test(system.local table)
 
