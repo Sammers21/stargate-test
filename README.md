@@ -95,6 +95,7 @@ to survive the high workloads.
 with serious workloads by any big tech companies. Stargate is an immature project.
 4. Because of the inability to reuse prepared statements there is a 2x performance loss in latency and inability to handle
 hundreds of requests per seconds in comparison to the native driver which scales impressively well.
+5. It does not seem to be possible to receive more than 100 rows in one select query via gRPC.
 
 
 # Links and references
