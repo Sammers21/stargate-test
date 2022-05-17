@@ -27,6 +27,6 @@ Native latency test x10000 average=1,410ms, min=0,751ms, max=1005,97ms
 
 # Links and references
 
-* https://stargate.io/docs/stargate/1.0/developers-guide/install/install_cass_40.html
-* https://github.com/stargate/docker-images/tree/master/examples/cassandra-4.0
-* https://github.com/stargate/stargate/blob/master/grpc-examples/src/main/java/io/stargate/grpcexample/GrpcClientExecuteQuery.java
+* [Developers guide](https://stargate.io/docs/stargate/1.0/developers-guide/install/install_cass_40.html)
+* [Cassandra 4.0 example](https://github.com/stargate/docker-images/tree/master/examples/cassandra-4.0)
+* [gRPC client examples](https://github.com/stargate/stargate/blob/master/grpc-examples/src/main/java/io/stargate/grpcexample/GrpcClientExecuteQuery.java)
