@@ -36,6 +36,7 @@ public class App {
     private static final Random random = new Random();
 
     private static PreparedStatement insertpreprd;
+    private static PreparedStatement select4kpreprd;
 
     static {
         token = Auth.getTokenFromAuthEndpoint(CASSANDRA, CASSANDRA, "http://localhost:8081/v1/auth");
@@ -58,14 +59,19 @@ public class App {
             StargateGrpc.newBlockingStub(channel)
                 .withDeadlineAfter(1000, TimeUnit.SECONDS)
                 .withCallCredentials(new StargateBearerToken(token));
+        insertpreprd = vertxRx3.rxPrepare("INSERT INTO ks.test (k, v) VALUES (?, ?)").blockingGet();
+        select4kpreprd = vertxRx3.rxPrepare("SELECT v FROM ks.test WHERE k = ?").blockingGet();
     }
 
     public static void main(String[] args) throws Exception {
         latencyTest(1000, 3000, "Grpc Stargate select release", App::grpcStargateSelectRelease0);
         latencyTest(1000, 3000, "Native select release", App::nativeSelectRelease0);
-        insertpreprd = vertxRx3.rxPrepare("INSERT INTO ks.test (k, v) VALUES (?, ?)").blockingGet();
         latencyTest(1000, 3000, "Native insert", App::nativeInsert0);
-        latencyTest(1000, 3000, "Grpc Stargate insert", App::grpcStargateInsert0);
+        latencyTest(100, 0, "Grpc Stargate insert", App::grpcStargateInsert0);
+        latencyTest(10, 0, "Native select 4k", App::nativeSelect4k0);
+        latencyTest(10, 0, "Grpc Stargate select 4k", App::grpcStargateSelect4k0);
+        latencyTest(10, 0, "Native select 100rows", App::nativeSelect100rows0);
+        latencyTest(10, 0, "Grpc Stargate select 100rows", App::grpcStargateSelect100rows0);
     }
 
     private static void latencyTest(int times, int warmup, String name, Runnable code) throws InterruptedException {
@@ -112,6 +118,21 @@ public class App {
     private static void nativeSelectRelease0() {
         vertxRx3.rxExecute("select release_version from system.local").blockingGet();
     }
+
+    private static void nativeSelect4k0() {
+        int size = vertxRx3.rxExecuteWithFullFetch(select4kpreprd.bind("x")).blockingGet().size();
+        if (size != 4000) {
+            System.out.println("Non-expected select result: " + size);
+        }
+    }
+
+    private static void nativeSelect100rows0() {
+        int size = vertxRx3.rxExecuteWithFullFetch(select4kpreprd.bind("y")).blockingGet().size();
+        if (size != 100) {
+            System.out.println("Non-expected select result: " + size);
+        }
+    }
+
     private static void nativeInsert0() {
         vertxRx3.rxExecute(insertpreprd.bind(UUID.randomUUID().toString(), random.nextInt())).blockingGet();
     }
@@ -128,5 +149,23 @@ public class App {
         stargateBlockingStub.executeQuery(
             QueryOuterClass.Query.newBuilder().setCql("select release_version from system.local").build()
         );
+    }
+
+    private static void grpcStargateSelect4k0() {
+        int size = stargateBlockingStub.executeQuery(
+            QueryOuterClass.Query.newBuilder().setCql("SELECT v FROM ks.test WHERE k = 'x'").build()
+        ).getResultSet().getRowsList().size();
+        if (size != 4000) {
+            System.out.println("Non-expected select result: " + size);
+        }
+    }
+
+    private static void grpcStargateSelect100rows0() {
+        int size = stargateBlockingStub.executeQuery(
+            QueryOuterClass.Query.newBuilder().setCql("SELECT v FROM ks.test WHERE k = 'y'").build()
+        ).getResultSet().getRowsList().size();
+        if (size != 100) {
+            System.out.println("Non-expected select result: " + size);
+        }
     }
 }

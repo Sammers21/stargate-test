@@ -49,7 +49,35 @@ It seems like Stargate is creating a prepared statement for every insert, despit
 While with native driver you just prepare once and use it all the time. Here is an issue on that topic: https://github.com/stargate/stargate/issues/931.
 `PreparedStatement`s in stargate are not being cached and reused in Stargate.
 
+### Test results
 
+After decreasing the amount of inserts we are getting the results:
+```
+Native insert x1000, avg=0,928ms, p50=1,45ms, p90=1,45ms p95=1,98ms p99=1,353ms, min=0,675ms, max=3,247ms
+Grpc Stargate insert x100, avg=2,578ms, p50=3,82ms, p90=3,82ms p95=3,821ms p99=6,986ms, min=1,673ms, max=6,986ms
+```
+Inserts with native driver are around 2.5x times faster than when using Stargate gRPC.
+
+## Test#3 select 4k rows
+
+Query: `SELECT v FROM ks.test WHERE k = 'x'`
+
+Results with default settings:
+```
+Native select 4k x10, avg=7,385ms, p50=11,810ms, p90=11,810ms p95=11,810ms p99=11,810ms, min=6,57ms, max=11,810ms
+```
+There is no results for the gRPC Stargate because it cant select more than 100 rows.
+
+
+## Test#4 select 100 rows
+
+Query: `SELECT v FROM ks.test WHERE k = 'y'`
+
+Results with default settings:
+```
+Native select 100rows x10, avg=1,860ms, p50=2,851ms, p90=2,851ms p95=2,851ms p99=2,851ms, min=1,196ms, max=2,851ms
+Grpc Stargate select 100rows x10, avg=3,351ms, p50=5,26ms, p90=5,26ms p95=5,26ms p99=5,26ms, min=2,667ms, max=5,26m
+```
 
 # Links and references
 
